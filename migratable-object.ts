@@ -16,48 +16,23 @@ export interface MigratableOptions {
   migrations: Record<string, string[]>;
 }
 
-export interface MigratableHandler {
-  _migrate(): Promise<MigrationResult[]>;
-}
-
-export type MigrateFn = () => Promise<MigrationResult[]>;
-
 interface MigrationRow extends Record<string, any> {
   version: string;
 }
 
-export class MigratableHandlerImpl implements MigratableHandler {
-  public sql: SqlStorage | undefined;
-  public env: any;
+class MigrationRunner {
+  private sql: SqlStorage;
   private currentVersion: number = 0;
-  private id: string | undefined;
   private migrations: Record<string, string[]>;
 
-  constructor(
-    sql: SqlStorage | undefined,
-    id?: string,
-    env?: any,
-    options?: MigratableOptions,
-  ) {
+  constructor(sql: SqlStorage, migrations: Record<string, string[]>) {
     this.sql = sql;
-    this.env = env;
-    this.id = id;
-    this.migrations = options?.migrations || {};
-
-    // Initialize migrations table and load current version
-    if (this.sql) {
-      this.initializeMigrations();
-    }
+    this.migrations = migrations;
+    this.initializeMigrations();
   }
 
-  /**
-   * Initialize the _migrations table and load the current version into memory
-   */
   private initializeMigrations(): void {
-    if (!this.sql) return;
-
     try {
-      // Create _migrations table if it doesn't exist
       this.sql.exec(`
         CREATE TABLE IF NOT EXISTS _migrations (
           version TEXT PRIMARY KEY,
@@ -66,7 +41,6 @@ export class MigratableHandlerImpl implements MigratableHandler {
         )
       `);
 
-      // Get the current version (latest successfully applied migration)
       const cursor = this.sql.exec(`
         SELECT version FROM _migrations 
         WHERE errors IS NULL
@@ -85,23 +59,16 @@ export class MigratableHandlerImpl implements MigratableHandler {
     }
   }
 
-  /**
-   * Apply migrations if newer versions are available
-   */
-  async _migrate(): Promise<MigrationResult[]> {
-    if (!this.sql) return [];
-
+  async migrate(): Promise<MigrationResult[]> {
     const results: MigrationResult[] = [];
 
-    // Sort version keys to ensure proper order
     const versionKeys = Object.keys(this.migrations)
       .map((version) => Number(version))
       .filter((version) => !isNaN(version))
       .sort((a, b) => a - b);
 
-    // Filter out versions that are already applied
     const newVersions = versionKeys.filter(
-      (version) => version > (this.currentVersion || 0),
+      (version) => version > this.currentVersion,
     );
 
     if (newVersions.length === 0) {
@@ -110,7 +77,6 @@ export class MigratableHandlerImpl implements MigratableHandler {
 
     for (const version of newVersions) {
       const migrationQueries = this.migrations[version.toString()];
-      const versionErrors: string[] = [];
       let versionSuccess = true;
 
       for (const query of migrationQueries) {
@@ -126,7 +92,6 @@ export class MigratableHandlerImpl implements MigratableHandler {
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
-          versionErrors.push(`Query failed: ${query}. Error: ${errorMessage}`);
 
           results.push({
             version,
@@ -135,23 +100,17 @@ export class MigratableHandlerImpl implements MigratableHandler {
             error: errorMessage,
           });
 
-          console.error(`Migration ${version} failed on query:`, query, error);
-          versionSuccess = false;
-
-          // Record the failed migration attempt with errors
           this.sql.exec(
             `INSERT INTO _migrations (version, errors) VALUES (?, ?)`,
             version.toString(),
-            JSON.stringify(versionErrors),
+            errorMessage,
           );
 
-          // Stop applying migrations on error
           throw new Error(`Migration ${version} failed: ${errorMessage}`);
         }
       }
 
       if (versionSuccess) {
-        // Record the successful migration
         this.sql.exec(
           `INSERT INTO _migrations (version) VALUES (?)`,
           version.toString(),
@@ -167,57 +126,33 @@ export class MigratableHandlerImpl implements MigratableHandler {
 export function Migratable(options: MigratableOptions) {
   return function <T extends { new (...args: any[]): any }>(constructor: T) {
     return class extends constructor {
-      public _migratableHandler?: MigratableHandlerImpl;
-      private _migratableOptions: MigratableOptions;
-
       constructor(...args: any[]) {
         super(...args);
-        this._migratableOptions = options;
-      }
 
-      async _migrate(): Promise<MigrationResult[]> {
-        // Initialize handler if not already done
-        if (!this._migratableHandler) {
-          this._migratableHandler = new MigratableHandlerImpl(
-            this.sql,
-            this.ctx?.id?.toString(),
-            this.env,
-            this._migratableOptions,
-          );
+        // Auto-migrate in constructor
+        if (this.sql) {
+          const runner = new MigrationRunner(this.sql, options.migrations);
+          runner.migrate().catch((error) => {
+            console.error("Migration failed:", error);
+            throw error;
+          });
         }
-
-        return await this._migratableHandler._migrate();
       }
     };
   };
 }
 
 export class MigratableObject<TEnv = any> extends DurableObject<TEnv> {
-  public sql: SqlStorage | undefined;
-  protected _migratableHandler?: MigratableHandlerImpl;
-  protected readonly options?: MigratableOptions;
-
   constructor(
     state: DurableObjectState,
     env: TEnv,
-    options?: MigratableOptions,
+    options: MigratableOptions,
   ) {
     super(state, env);
-    this.sql = state.storage.sql;
-    this.options = options;
-    state.blockConcurrencyWhile(this._migrate);
-  }
 
-  async _migrate(): Promise<MigrationResult[]> {
-    if (!this._migratableHandler) {
-      this._migratableHandler = new MigratableHandlerImpl(
-        this.sql,
-        this.ctx.id.toString(),
-        this.env,
-        this.options,
-      );
-    }
-
-    return await this._migratableHandler._migrate();
+    state.blockConcurrencyWhile(async () => {
+      const runner = new MigrationRunner(state.storage.sql, options.migrations);
+      await runner.migrate();
+    });
   }
 }

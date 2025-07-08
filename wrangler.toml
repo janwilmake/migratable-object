@@ -1,0 +1,11 @@
+name = "migratable-demo"
+main = "demo.ts"
+compatibility_date = "2025-07-01"
+
+[[durable_objects.bindings]]
+name = "ITEMS_STORE"
+class_name = "ItemsStore"
+
+[[migrations]]
+new_sqlite_classes = ["ItemsStore"]
+tag = "v1"
