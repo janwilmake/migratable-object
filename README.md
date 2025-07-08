@@ -1,4 +1,6 @@
-Adds function `migrate` to your DO that runs migrations that didn't run yet.
+Problem: when you have a DO with production data and you want to alter the schema, you can't just do this in the constructor as it will be ran every time.
+
+Solution: migratable-object runs each new version just once upon construction such that your schemas can always be up-to-date.
 
 ```
 npm i migratable-object

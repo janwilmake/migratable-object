@@ -1,6 +1,6 @@
 {
   "name": "migratable-object",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "migratable-object.ts",
   "files": [
     "migratable-object.ts"
