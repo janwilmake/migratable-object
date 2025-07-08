@@ -14,11 +14,11 @@ import { Migratable, MigrateFn } from "migratable-object";
   },
 })
 class MyMigratableObject extends DurableObject {
-  migrate: MigrateFn;
+  _migrate: MigrateFn;
 
   async fetch(request: Request): Promise<Response> {
     // Run migrations before handling requests
-    const migrationResults: MigrationResult[] = await this.migrate();
+    const migrationResults: MigrationResult[] = await this._migrate();
 
     if (migrationResults.length > 0) {
       console.log("Applied migrations:", migrationResults);

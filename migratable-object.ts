@@ -17,7 +17,7 @@ export interface MigratableOptions {
 }
 
 export interface MigratableHandler {
-  migrate(): Promise<MigrationResult[]>;
+  _migrate(): Promise<MigrationResult[]>;
 }
 
 export type MigrateFn = () => Promise<MigrationResult[]>;
@@ -88,7 +88,7 @@ export class MigratableHandlerImpl implements MigratableHandler {
   /**
    * Apply migrations if newer versions are available
    */
-  async migrate(): Promise<MigrationResult[]> {
+  async _migrate(): Promise<MigrationResult[]> {
     if (!this.sql) return [];
 
     const results: MigrationResult[] = [];
@@ -175,7 +175,7 @@ export function Migratable(options: MigratableOptions) {
         this._migratableOptions = options;
       }
 
-      async migrate(): Promise<MigrationResult[]> {
+      async _migrate(): Promise<MigrationResult[]> {
         // Initialize handler if not already done
         if (!this._migratableHandler) {
           this._migratableHandler = new MigratableHandlerImpl(
@@ -186,7 +186,7 @@ export function Migratable(options: MigratableOptions) {
           );
         }
 
-        return await this._migratableHandler.migrate();
+        return await this._migratableHandler._migrate();
       }
     };
   };
@@ -207,7 +207,7 @@ export class MigratableObject<TEnv = any> extends DurableObject<TEnv> {
     this.options = options;
   }
 
-  async migrate(): Promise<MigrationResult[]> {
+  async _migrate(): Promise<MigrationResult[]> {
     if (!this._migratableHandler) {
       this._migratableHandler = new MigratableHandlerImpl(
         this.sql,
@@ -217,6 +217,6 @@ export class MigratableObject<TEnv = any> extends DurableObject<TEnv> {
       );
     }
 
-    return await this._migratableHandler.migrate();
+    return await this._migratableHandler._migrate();
   }
 }
