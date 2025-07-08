@@ -205,6 +205,7 @@ export class MigratableObject<TEnv = any> extends DurableObject<TEnv> {
     super(state, env);
     this.sql = state.storage.sql;
     this.options = options;
+    state.blockConcurrencyWhile(this._migrate);
   }
 
   async _migrate(): Promise<MigrationResult[]> {

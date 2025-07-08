@@ -5,7 +5,7 @@ npm i migratable-object
 ```
 
 ```ts
-import { Migratable, MigrateFn } from "migratable-object";
+import { Migratable } from "migratable-object";
 
 @Migratable({
   migrations: {
@@ -14,17 +14,8 @@ import { Migratable, MigrateFn } from "migratable-object";
   },
 })
 class MyMigratableObject extends DurableObject {
-  _migrate: MigrateFn;
-
   async fetch(request: Request): Promise<Response> {
-    // Run migrations before handling requests
-    const migrationResults: MigrationResult[] = await this._migrate();
-
-    if (migrationResults.length > 0) {
-      console.log("Applied migrations:", migrationResults);
-    }
-
-    // Your regular request handling logic here
+    // Your regular request can assume the migrations were ran.
     return new Response("Hello World!");
   }
 }
