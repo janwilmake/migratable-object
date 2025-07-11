@@ -1,3 +1,4 @@
+//@ts-nocheck
 /// <reference types="@cloudflare/workers-types" />
 
 import { DurableObject } from "cloudflare:workers";

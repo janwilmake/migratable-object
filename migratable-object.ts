@@ -130,13 +130,15 @@ export function Migratable(options: MigratableOptions) {
         super(...args);
 
         // Auto-migrate in constructor
-        if (this.sql) {
-          const runner = new MigrationRunner(this.sql, options.migrations);
-          runner.migrate().catch((error) => {
-            console.error("Migration failed:", error);
-            throw error;
-          });
+        if (!this.sql) {
+          throw new Error("Migratable Object must have access to this.sql");
         }
+
+        const runner = new MigrationRunner(this.sql, options.migrations);
+        runner.migrate().catch((error) => {
+          console.error("Migration failed:", error);
+          throw error;
+        });
       }
     };
   };
