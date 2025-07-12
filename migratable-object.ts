@@ -10,7 +10,6 @@ export interface MigratableOptions {
 interface MigrationRow extends Record<string, any> {
   version: string;
 }
-
 export function runMigrations(
   execFn: SqlStorage["exec"],
   migrations: Record<string, string[]>,
@@ -19,8 +18,8 @@ export function runMigrations(
     if (!migrations) {
       throw new Error("Migrations were not provided");
     }
-    const invalidVersions = Object.keys(migrations).filter(
-      (version) => !isNaN(Number(version)),
+    const invalidVersions = Object.keys(migrations).filter((version) =>
+      isNaN(Number(version)),
     );
 
     if (invalidVersions.length > 0) {
@@ -39,21 +38,21 @@ export function runMigrations(
       )
     `);
 
-    // Get current version
-    const cursor = execFn(`
+    // Get all successfully applied migrations
+
+    const appliedVersions = new Set(
+      execFn<MigrationRow>(`
       SELECT version FROM _migrations 
       WHERE errors IS NULL
-      ORDER BY applied_at DESC 
-      LIMIT 1
-    `);
+    `)
+        .toArray()
+        .map((row) => Number(row.version)),
+    );
 
-    const rows = cursor.toArray() as MigrationRow[];
-    const currentVersion = rows[0] ? Number(rows[0].version) : 0;
-
-    // Get pending migrations
+    // Get pending migrations - only run migrations that haven't been applied
     const versionKeys = Object.keys(migrations)
       .map(Number)
-      .filter((version) => !isNaN(version) && version > currentVersion)
+      .filter((version) => !isNaN(version) && !appliedVersions.has(version))
       .sort((a, b) => a - b);
 
     // Run pending migrations
@@ -68,12 +67,17 @@ export function runMigrations(
             error instanceof Error ? error.message : String(error);
 
           execFn(
-            `INSERT INTO _migrations (version, errors) VALUES (?, ?)`,
+            `INSERT OR REPLACE INTO _migrations (version, errors) VALUES (?, ?)`,
             version.toString(),
             errorMessage,
           );
 
-          return `Migration ${version} failed: ${errorMessage}`;
+          const fullError = `Migration ${version} failed\n\n${
+            migrationQueries.length > 1
+              ? `Queries:\n"""\n${migrationQueries.join("\n")}\n"""\n\n`
+              : ""
+          }Erroneous Query:\n"""\n${query}\n"""\n\nERROR:\n"""\n${errorMessage}\n"""\n\n`;
+          return fullError;
         }
       }
 
@@ -97,12 +101,8 @@ export function Migratable(options: MigratableOptions) {
       constructor(...args: any[]) {
         super(...args);
 
-        if (!this.sql) {
-          throw new Error("Migratable Object must have access to this.sql");
-        }
-
         const error = runMigrations(
-          this.sql.exec.bind(this.sql),
+          this.ctx.storage.sql.exec.bind(this.ctx.storage.sql),
           options.migrations,
         );
         if (error) {
@@ -122,14 +122,13 @@ export class MigratableObject<TEnv = any> extends DurableObject<TEnv> {
   ) {
     super(state, env);
 
-    state.blockConcurrencyWhile(async () => {
-      const error = runMigrations(
-        state.storage.sql.exec.bind(state.storage.sql),
-        options.migrations,
-      );
-      if (error) {
-        throw new Error(error);
-      }
-    });
+    const error = runMigrations(
+      state.storage.sql.exec.bind(state.storage.sql),
+      options.migrations,
+    );
+    if (error) {
+      console.error("Migration failed:", error);
+      throw new Error(error);
+    }
   }
 }
