@@ -7,7 +7,7 @@ npm i migratable-object
 ```
 
 ```ts
-import { Migratable } from "migratable-object";
+import { Migratable, MigratableObject } from "migratable-object";
 
 @Migratable({
   migrations: {
@@ -22,3 +22,25 @@ class MyMigratableObject extends DurableObject {
   }
 }
 ```
+
+Or this is the other way to use it without the decorator:
+
+```ts
+import { MigratableObject } from "migratable-object";
+
+export class ItemsStore extends MigratableObject {
+  constructor(state, env) {
+    super(state, env, {
+      migrations: {
+        "1": ["CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"],
+        "2": ["ALTER TABLE users ADD COLUMN email TEXT"],
+      },
+    });
+  }
+}
+```
+
+# Changelog
+
+- 2025-07-08 - initial version (https://x.com/janwilmake/status/1942514837332058225)
+- 2025-07-12 - When the migration failed and contains an error we should show this and throw entire DO; When migration succeeds and contained an error before, error should be removed (https://x.com/janwilmake/status/1944000217746993484)

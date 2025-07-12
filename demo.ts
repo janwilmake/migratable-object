@@ -4,18 +4,20 @@
 import { DurableObject } from "cloudflare:workers";
 import { Migratable, MigratableObject } from "./migratable-object";
 
-@Migratable({
-  migrations: {
-    "1": [
-      `CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
-    ],
-    "2": [`CREATE TABLE items2 (name TEXT, description TEXT)`],
-    "3": [`CREATE TABLE items3 (name TEXT)`],
-    "4": [`CREATE TABLE items4 (name TEXT)`],
-    "5": [`CREATE TABLEAU itemssss (name TEXT)`],
-  },
-})
-export class ItemsStore extends DurableObject {
+export class ItemsStore extends MigratableObject {
+  constructor(state, env) {
+    super(state, env, {
+      migrations: {
+        "1": [
+          `CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+        ],
+        "2": [`CREATE TABLE items2 (name TEXT, description TEXT)`],
+        "3": [`CREATE TABLE items3 (name TEXT)`],
+        "4": [`CREATE TABLE items4 (name TEXT)`],
+        //  "5": [`CREATE TABLEAU itemssss (name TEXT)`],
+      },
+    });
+  }
   async addAndGetCount(name: string): Promise<number> {
     this.ctx.storage.sql.exec("INSERT INTO items (name) VALUES (?)", name);
     const cursor = this.ctx.storage.sql.exec(
