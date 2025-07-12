@@ -14,7 +14,7 @@ export class ItemsStore extends MigratableObject {
         "2": [`CREATE TABLE items2 (name TEXT, description TEXT)`],
         "3": [`CREATE TABLE items3 (name TEXT)`],
         "4": [`CREATE TABLE items4 (name TEXT)`],
-        //  "5": [`CREATE TABLEAU itemssss (name TEXT)`],
+        "5": [`CREATE TABLEAU itemssss (name TEXT)`],
       },
     });
   }
