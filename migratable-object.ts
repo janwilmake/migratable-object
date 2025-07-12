@@ -16,6 +16,20 @@ export function runMigrations(
   migrations: Record<string, string[]>,
 ): string | null {
   try {
+    if (!migrations) {
+      throw new Error("Migrations were not provided");
+    }
+    const invalidVersions = Object.keys(migrations).filter(
+      (version) => !isNaN(Number(version)),
+    );
+
+    if (invalidVersions.length > 0) {
+      throw new Error(
+        "Migration version keys must be numeric. Not numeric: " +
+          invalidVersions.join(","),
+      );
+    }
+
     // Initialize migrations table
     execFn(`
       CREATE TABLE IF NOT EXISTS _migrations (
